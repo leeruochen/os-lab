@@ -5,24 +5,14 @@ user/_zombie:     file format elf64-littleriscv
 Disassembly of section .text:
 
 0000000000000000 <main>:
-#include "kernel/stat.h"
-#include "user/user.h"
-
-int
-main(void)
-{
    0:	1141                	addi	sp,sp,-16
    2:	e406                	sd	ra,8(sp)
    4:	e022                	sd	s0,0(sp)
    6:	0800                	addi	s0,sp,16
-  if(fork() > 0)
    8:	2a4000ef          	jal	2ac <fork>
    c:	00a04563          	bgtz	a0,16 <main+0x16>
-    pause(5);  // Let child exit before parent.
-  exit(0);
   10:	4501                	li	a0,0
   12:	2a2000ef          	jal	2b4 <exit>
-    pause(5);  // Let child exit before parent.
   16:	4515                	li	a0,5
   18:	32c000ef          	jal	344 <pause>
   1c:	bfd5                	j	10 <main+0x10>
@@ -1257,184 +1247,113 @@ printf(const char *fmt, ...)
  718:	8082                	ret
 
 000000000000071a <free>:
-static Header base;
-static Header *freep;
-
-void
-free(void *ap)
-{
  71a:	1141                	addi	sp,sp,-16
  71c:	e422                	sd	s0,8(sp)
  71e:	0800                	addi	s0,sp,16
-  Header *bp, *p;
-
-  bp = (Header*)ap - 1;
  720:	ff050693          	addi	a3,a0,-16
-  for(p = freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr)
  724:	00001797          	auipc	a5,0x1
  728:	8dc7b783          	ld	a5,-1828(a5) # 1000 <freep>
  72c:	a02d                	j	756 <free+0x3c>
-    if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
-      break;
-  if(bp + bp->s.size == p->s.ptr){
-    bp->s.size += p->s.ptr->s.size;
  72e:	4618                	lw	a4,8(a2)
  730:	9f2d                	addw	a4,a4,a1
  732:	fee52c23          	sw	a4,-8(a0)
-    bp->s.ptr = p->s.ptr->s.ptr;
  736:	6398                	ld	a4,0(a5)
  738:	6310                	ld	a2,0(a4)
  73a:	a83d                	j	778 <free+0x5e>
-  } else
-    bp->s.ptr = p->s.ptr;
-  if(p + p->s.size == bp){
-    p->s.size += bp->s.size;
  73c:	ff852703          	lw	a4,-8(a0)
  740:	9f31                	addw	a4,a4,a2
  742:	c798                	sw	a4,8(a5)
-    p->s.ptr = bp->s.ptr;
  744:	ff053683          	ld	a3,-16(a0)
  748:	a091                	j	78c <free+0x72>
-    if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
  74a:	6398                	ld	a4,0(a5)
  74c:	00e7e463          	bltu	a5,a4,754 <free+0x3a>
  750:	00e6ea63          	bltu	a3,a4,764 <free+0x4a>
-{
  754:	87ba                	mv	a5,a4
-  for(p = freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr)
  756:	fed7fae3          	bgeu	a5,a3,74a <free+0x30>
  75a:	6398                	ld	a4,0(a5)
  75c:	00e6e463          	bltu	a3,a4,764 <free+0x4a>
-    if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
  760:	fee7eae3          	bltu	a5,a4,754 <free+0x3a>
-  if(bp + bp->s.size == p->s.ptr){
  764:	ff852583          	lw	a1,-8(a0)
  768:	6390                	ld	a2,0(a5)
  76a:	02059813          	slli	a6,a1,0x20
  76e:	01c85713          	srli	a4,a6,0x1c
  772:	9736                	add	a4,a4,a3
  774:	fae60de3          	beq	a2,a4,72e <free+0x14>
-    bp->s.ptr = p->s.ptr->s.ptr;
  778:	fec53823          	sd	a2,-16(a0)
-  if(p + p->s.size == bp){
  77c:	4790                	lw	a2,8(a5)
  77e:	02061593          	slli	a1,a2,0x20
  782:	01c5d713          	srli	a4,a1,0x1c
  786:	973e                	add	a4,a4,a5
  788:	fae68ae3          	beq	a3,a4,73c <free+0x22>
-    p->s.ptr = bp->s.ptr;
  78c:	e394                	sd	a3,0(a5)
-  } else
-    p->s.ptr = bp;
-  freep = p;
  78e:	00001717          	auipc	a4,0x1
  792:	86f73923          	sd	a5,-1934(a4) # 1000 <freep>
-}
  796:	6422                	ld	s0,8(sp)
  798:	0141                	addi	sp,sp,16
  79a:	8082                	ret
 
 000000000000079c <malloc>:
-  return freep;
-}
-
-void*
-malloc(uint nbytes)
-{
  79c:	7139                	addi	sp,sp,-64
  79e:	fc06                	sd	ra,56(sp)
  7a0:	f822                	sd	s0,48(sp)
  7a2:	f426                	sd	s1,40(sp)
  7a4:	ec4e                	sd	s3,24(sp)
  7a6:	0080                	addi	s0,sp,64
-  Header *p, *prevp;
-  uint nunits;
-
-  nunits = (nbytes + sizeof(Header) - 1)/sizeof(Header) + 1;
  7a8:	02051493          	slli	s1,a0,0x20
  7ac:	9081                	srli	s1,s1,0x20
  7ae:	04bd                	addi	s1,s1,15
  7b0:	8091                	srli	s1,s1,0x4
  7b2:	0014899b          	addiw	s3,s1,1
  7b6:	0485                	addi	s1,s1,1
-  if((prevp = freep) == 0){
  7b8:	00001517          	auipc	a0,0x1
  7bc:	84853503          	ld	a0,-1976(a0) # 1000 <freep>
  7c0:	c915                	beqz	a0,7f4 <malloc+0x58>
-    base.s.ptr = freep = prevp = &base;
-    base.s.size = 0;
-  }
-  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr){
  7c2:	611c                	ld	a5,0(a0)
-    if(p->s.size >= nunits){
  7c4:	4798                	lw	a4,8(a5)
  7c6:	08977a63          	bgeu	a4,s1,85a <malloc+0xbe>
  7ca:	f04a                	sd	s2,32(sp)
  7cc:	e852                	sd	s4,16(sp)
  7ce:	e456                	sd	s5,8(sp)
  7d0:	e05a                	sd	s6,0(sp)
-  if(nu < 4096)
  7d2:	8a4e                	mv	s4,s3
  7d4:	0009871b          	sext.w	a4,s3
  7d8:	6685                	lui	a3,0x1
  7da:	00d77363          	bgeu	a4,a3,7e0 <malloc+0x44>
  7de:	6a05                	lui	s4,0x1
  7e0:	000a0b1b          	sext.w	s6,s4
-  p = sbrk(nu * sizeof(Header));
  7e4:	004a1a1b          	slliw	s4,s4,0x4
-        p->s.size = nunits;
-      }
-      freep = prevp;
-      return (void*)(p + 1);
-    }
-    if(p == freep)
  7e8:	00001917          	auipc	s2,0x1
  7ec:	81890913          	addi	s2,s2,-2024 # 1000 <freep>
-  if(p == SBRK_ERROR)
  7f0:	5afd                	li	s5,-1
  7f2:	a081                	j	832 <malloc+0x96>
  7f4:	f04a                	sd	s2,32(sp)
  7f6:	e852                	sd	s4,16(sp)
  7f8:	e456                	sd	s5,8(sp)
  7fa:	e05a                	sd	s6,0(sp)
-    base.s.ptr = freep = prevp = &base;
  7fc:	00001797          	auipc	a5,0x1
  800:	81478793          	addi	a5,a5,-2028 # 1010 <base>
  804:	00000717          	auipc	a4,0x0
  808:	7ef73e23          	sd	a5,2044(a4) # 1000 <freep>
  80c:	e39c                	sd	a5,0(a5)
-    base.s.size = 0;
  80e:	0007a423          	sw	zero,8(a5)
-    if(p->s.size >= nunits){
  812:	b7c1                	j	7d2 <malloc+0x36>
-        prevp->s.ptr = p->s.ptr;
  814:	6398                	ld	a4,0(a5)
  816:	e118                	sd	a4,0(a0)
  818:	a8a9                	j	872 <malloc+0xd6>
-  hp->s.size = nu;
  81a:	01652423          	sw	s6,8(a0)
-  free((void*)(hp + 1));
  81e:	0541                	addi	a0,a0,16
  820:	efbff0ef          	jal	71a <free>
-  return freep;
  824:	00093503          	ld	a0,0(s2)
-      if((p = morecore(nunits)) == 0)
  828:	c12d                	beqz	a0,88a <malloc+0xee>
-  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr){
  82a:	611c                	ld	a5,0(a0)
-    if(p->s.size >= nunits){
  82c:	4798                	lw	a4,8(a5)
  82e:	02977263          	bgeu	a4,s1,852 <malloc+0xb6>
-    if(p == freep)
  832:	00093703          	ld	a4,0(s2)
  836:	853e                	mv	a0,a5
  838:	fef719e3          	bne	a4,a5,82a <malloc+0x8e>
-  p = sbrk(nu * sizeof(Header));
  83c:	8552                	mv	a0,s4
  83e:	a43ff0ef          	jal	280 <sbrk>
-  if(p == SBRK_ERROR)
  842:	fd551ce3          	bne	a0,s5,81a <malloc+0x7e>
-        return 0;
  846:	4501                	li	a0,0
  848:	7902                	ld	s2,32(sp)
  84a:	6a42                	ld	s4,16(sp)
@@ -1445,24 +1364,16 @@ malloc(uint nbytes)
  854:	6a42                	ld	s4,16(sp)
  856:	6aa2                	ld	s5,8(sp)
  858:	6b02                	ld	s6,0(sp)
-      if(p->s.size == nunits)
  85a:	fae48de3          	beq	s1,a4,814 <malloc+0x78>
-        p->s.size -= nunits;
  85e:	4137073b          	subw	a4,a4,s3
  862:	c798                	sw	a4,8(a5)
-        p += p->s.size;
  864:	02071693          	slli	a3,a4,0x20
  868:	01c6d713          	srli	a4,a3,0x1c
  86c:	97ba                	add	a5,a5,a4
-        p->s.size = nunits;
  86e:	0137a423          	sw	s3,8(a5)
-      freep = prevp;
  872:	00000717          	auipc	a4,0x0
  876:	78a73723          	sd	a0,1934(a4) # 1000 <freep>
-      return (void*)(p + 1);
  87a:	01078513          	addi	a0,a5,16
-  }
-}
  87e:	70e2                	ld	ra,56(sp)
  880:	7442                	ld	s0,48(sp)
  882:	74a2                	ld	s1,40(sp)

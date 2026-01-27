@@ -1531,184 +1531,113 @@ printf(const char *fmt, ...)
  966:	8082                	ret
 
 0000000000000968 <free>:
-static Header base;
-static Header *freep;
-
-void
-free(void *ap)
-{
  968:	1141                	addi	sp,sp,-16
  96a:	e422                	sd	s0,8(sp)
  96c:	0800                	addi	s0,sp,16
-  Header *bp, *p;
-
-  bp = (Header*)ap - 1;
  96e:	ff050693          	addi	a3,a0,-16
-  for(p = freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr)
  972:	00001797          	auipc	a5,0x1
  976:	68e7b783          	ld	a5,1678(a5) # 2000 <freep>
  97a:	a02d                	j	9a4 <free+0x3c>
-    if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
-      break;
-  if(bp + bp->s.size == p->s.ptr){
-    bp->s.size += p->s.ptr->s.size;
  97c:	4618                	lw	a4,8(a2)
  97e:	9f2d                	addw	a4,a4,a1
  980:	fee52c23          	sw	a4,-8(a0)
-    bp->s.ptr = p->s.ptr->s.ptr;
  984:	6398                	ld	a4,0(a5)
  986:	6310                	ld	a2,0(a4)
  988:	a83d                	j	9c6 <free+0x5e>
-  } else
-    bp->s.ptr = p->s.ptr;
-  if(p + p->s.size == bp){
-    p->s.size += bp->s.size;
  98a:	ff852703          	lw	a4,-8(a0)
  98e:	9f31                	addw	a4,a4,a2
  990:	c798                	sw	a4,8(a5)
-    p->s.ptr = bp->s.ptr;
  992:	ff053683          	ld	a3,-16(a0)
  996:	a091                	j	9da <free+0x72>
-    if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
  998:	6398                	ld	a4,0(a5)
  99a:	00e7e463          	bltu	a5,a4,9a2 <free+0x3a>
  99e:	00e6ea63          	bltu	a3,a4,9b2 <free+0x4a>
-{
  9a2:	87ba                	mv	a5,a4
-  for(p = freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr)
  9a4:	fed7fae3          	bgeu	a5,a3,998 <free+0x30>
  9a8:	6398                	ld	a4,0(a5)
  9aa:	00e6e463          	bltu	a3,a4,9b2 <free+0x4a>
-    if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
  9ae:	fee7eae3          	bltu	a5,a4,9a2 <free+0x3a>
-  if(bp + bp->s.size == p->s.ptr){
  9b2:	ff852583          	lw	a1,-8(a0)
  9b6:	6390                	ld	a2,0(a5)
  9b8:	02059813          	slli	a6,a1,0x20
  9bc:	01c85713          	srli	a4,a6,0x1c
  9c0:	9736                	add	a4,a4,a3
  9c2:	fae60de3          	beq	a2,a4,97c <free+0x14>
-    bp->s.ptr = p->s.ptr->s.ptr;
  9c6:	fec53823          	sd	a2,-16(a0)
-  if(p + p->s.size == bp){
  9ca:	4790                	lw	a2,8(a5)
  9cc:	02061593          	slli	a1,a2,0x20
  9d0:	01c5d713          	srli	a4,a1,0x1c
  9d4:	973e                	add	a4,a4,a5
  9d6:	fae68ae3          	beq	a3,a4,98a <free+0x22>
-    p->s.ptr = bp->s.ptr;
  9da:	e394                	sd	a3,0(a5)
-  } else
-    p->s.ptr = bp;
-  freep = p;
  9dc:	00001717          	auipc	a4,0x1
  9e0:	62f73223          	sd	a5,1572(a4) # 2000 <freep>
-}
  9e4:	6422                	ld	s0,8(sp)
  9e6:	0141                	addi	sp,sp,16
  9e8:	8082                	ret
 
 00000000000009ea <malloc>:
-  return freep;
-}
-
-void*
-malloc(uint nbytes)
-{
  9ea:	7139                	addi	sp,sp,-64
  9ec:	fc06                	sd	ra,56(sp)
  9ee:	f822                	sd	s0,48(sp)
  9f0:	f426                	sd	s1,40(sp)
  9f2:	ec4e                	sd	s3,24(sp)
  9f4:	0080                	addi	s0,sp,64
-  Header *p, *prevp;
-  uint nunits;
-
-  nunits = (nbytes + sizeof(Header) - 1)/sizeof(Header) + 1;
  9f6:	02051493          	slli	s1,a0,0x20
  9fa:	9081                	srli	s1,s1,0x20
  9fc:	04bd                	addi	s1,s1,15
  9fe:	8091                	srli	s1,s1,0x4
  a00:	0014899b          	addiw	s3,s1,1
  a04:	0485                	addi	s1,s1,1
-  if((prevp = freep) == 0){
  a06:	00001517          	auipc	a0,0x1
  a0a:	5fa53503          	ld	a0,1530(a0) # 2000 <freep>
  a0e:	c915                	beqz	a0,a42 <malloc+0x58>
-    base.s.ptr = freep = prevp = &base;
-    base.s.size = 0;
-  }
-  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr){
  a10:	611c                	ld	a5,0(a0)
-    if(p->s.size >= nunits){
  a12:	4798                	lw	a4,8(a5)
  a14:	08977a63          	bgeu	a4,s1,aa8 <malloc+0xbe>
  a18:	f04a                	sd	s2,32(sp)
  a1a:	e852                	sd	s4,16(sp)
  a1c:	e456                	sd	s5,8(sp)
  a1e:	e05a                	sd	s6,0(sp)
-  if(nu < 4096)
  a20:	8a4e                	mv	s4,s3
  a22:	0009871b          	sext.w	a4,s3
  a26:	6685                	lui	a3,0x1
  a28:	00d77363          	bgeu	a4,a3,a2e <malloc+0x44>
  a2c:	6a05                	lui	s4,0x1
  a2e:	000a0b1b          	sext.w	s6,s4
-  p = sbrk(nu * sizeof(Header));
  a32:	004a1a1b          	slliw	s4,s4,0x4
-        p->s.size = nunits;
-      }
-      freep = prevp;
-      return (void*)(p + 1);
-    }
-    if(p == freep)
  a36:	00001917          	auipc	s2,0x1
  a3a:	5ca90913          	addi	s2,s2,1482 # 2000 <freep>
-  if(p == SBRK_ERROR)
  a3e:	5afd                	li	s5,-1
  a40:	a081                	j	a80 <malloc+0x96>
  a42:	f04a                	sd	s2,32(sp)
  a44:	e852                	sd	s4,16(sp)
  a46:	e456                	sd	s5,8(sp)
  a48:	e05a                	sd	s6,0(sp)
-    base.s.ptr = freep = prevp = &base;
  a4a:	00001797          	auipc	a5,0x1
  a4e:	5d678793          	addi	a5,a5,1494 # 2020 <base>
  a52:	00001717          	auipc	a4,0x1
  a56:	5af73723          	sd	a5,1454(a4) # 2000 <freep>
  a5a:	e39c                	sd	a5,0(a5)
-    base.s.size = 0;
  a5c:	0007a423          	sw	zero,8(a5)
-    if(p->s.size >= nunits){
  a60:	b7c1                	j	a20 <malloc+0x36>
-        prevp->s.ptr = p->s.ptr;
  a62:	6398                	ld	a4,0(a5)
  a64:	e118                	sd	a4,0(a0)
  a66:	a8a9                	j	ac0 <malloc+0xd6>
-  hp->s.size = nu;
  a68:	01652423          	sw	s6,8(a0)
-  free((void*)(hp + 1));
  a6c:	0541                	addi	a0,a0,16
  a6e:	efbff0ef          	jal	968 <free>
-  return freep;
  a72:	00093503          	ld	a0,0(s2)
-      if((p = morecore(nunits)) == 0)
  a76:	c12d                	beqz	a0,ad8 <malloc+0xee>
-  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr){
  a78:	611c                	ld	a5,0(a0)
-    if(p->s.size >= nunits){
  a7a:	4798                	lw	a4,8(a5)
  a7c:	02977263          	bgeu	a4,s1,aa0 <malloc+0xb6>
-    if(p == freep)
  a80:	00093703          	ld	a4,0(s2)
  a84:	853e                	mv	a0,a5
  a86:	fef719e3          	bne	a4,a5,a78 <malloc+0x8e>
-  p = sbrk(nu * sizeof(Header));
  a8a:	8552                	mv	a0,s4
  a8c:	a43ff0ef          	jal	4ce <sbrk>
-  if(p == SBRK_ERROR)
  a90:	fd551ce3          	bne	a0,s5,a68 <malloc+0x7e>
-        return 0;
  a94:	4501                	li	a0,0
  a96:	7902                	ld	s2,32(sp)
  a98:	6a42                	ld	s4,16(sp)
@@ -1719,24 +1648,16 @@ malloc(uint nbytes)
  aa2:	6a42                	ld	s4,16(sp)
  aa4:	6aa2                	ld	s5,8(sp)
  aa6:	6b02                	ld	s6,0(sp)
-      if(p->s.size == nunits)
  aa8:	fae48de3          	beq	s1,a4,a62 <malloc+0x78>
-        p->s.size -= nunits;
  aac:	4137073b          	subw	a4,a4,s3
  ab0:	c798                	sw	a4,8(a5)
-        p += p->s.size;
  ab2:	02071693          	slli	a3,a4,0x20
  ab6:	01c6d713          	srli	a4,a3,0x1c
  aba:	97ba                	add	a5,a5,a4
-        p->s.size = nunits;
  abc:	0137a423          	sw	s3,8(a5)
-      freep = prevp;
  ac0:	00001717          	auipc	a4,0x1
  ac4:	54a73023          	sd	a0,1344(a4) # 2000 <freep>
-      return (void*)(p + 1);
  ac8:	01078513          	addi	a0,a5,16
-  }
-}
  acc:	70e2                	ld	ra,56(sp)
  ace:	7442                	ld	s0,48(sp)
  ad0:	74a2                	ld	s1,40(sp)

@@ -1,99 +1,94 @@
-#include "kernel/types.h" // types definition
-#include "kernel/stat.h"  // file status structure
-#include "user/user.h"    // system calls, utility functions
-#include "kernel/fcntl.h" // file control options, O_RDONLY
-#include "kernel/param.h" // system parameters, MAXARG (32)
-#include "kernel/fs.h"    // file system structures
+#include "kernel/types.h"
+#include "kernel/stat.h"
+#include "user/user.h"
+#include "kernel/fcntl.h"
 
-int isdigit(char c)
+// Helper: Returns 1 if s contains ONLY '5' or '6'. Returns 0 otherwise.
+int is_valid_sixfive(char *s)
 {
-    return c >= '0' && c <= '9'; // if c is between '0' and '9', it's a digit, return true
+    if (strlen(s) == 0) return 0; // Empty string is not a valid number, it shouldnt even get here because i > 0 checks if there is at least one char
+
+    for (int i = 0; s[i] != 0; i++)
+    {
+        if (s[i] != '5' && s[i] != '6')
+        {
+            return 0; // Found a bad digit (like '7' or 'a')
+        }
+    }
+    return 1; // All checks passed
+}
+
+// Helper: Checks if a character is a separator
+int is_delim(char c)
+{
+    // You can add more delimiters here if needed
+    return (c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == ',' || c == '.');
+}
+
+void process(int fd)
+{
+    char buf[128];
+    int i = 0;
+    char c;
+    
+    // Loop through the file one char at a time
+    while (read(fd, &c, 1) == 1)
+    {
+        if (is_delim(c))
+        {
+            // DELIMITER FOUND: Process the accumulated word
+            if (i > 0) 
+            {
+                buf[i] = 0; // Null-terminate string
+                
+                if (is_valid_sixfive(buf))
+                {
+                    printf("%s\n", buf);
+                }
+                
+                i = 0; // Reset buffer for the next word
+            }
+        }
+        else
+        {
+            // NOT A DELIMITER: Add to buffer
+            if (i < 127) // Protect against Buffer Overflow
+            {
+                buf[i++] = c;
+            }
+            // If word is too long, we just stop adding (truncate), 
+            // or you could ignore the rest of the word.
+        }
+    }
+
+    // CHECK LAST WORD: Logic to handle file ending without a newline
+    if (i > 0)
+    {
+        buf[i] = 0;
+        if (is_valid_sixfive(buf))
+        {
+            printf("%s\n", buf);
+        }
+    }
 }
 
 int main(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        printf("Usage: sixfive <txt file>\n");
+        printf("Usage: sixfive <filename>\n");
         exit(1);
     }
 
-    char *delims = "-\r\t\n./,";
-    char c; // current character being read
-    char buffer[100];
-    int i;
-    int flag;
-    int sixorfiveflag;
-    int final;
-    int notfivesixflag;
-
-    for (int k = 1; k < argc; k++) // loop through all provided files
+    for (int k = 1; k < argc; k++)
     {
-        int fd = open(argv[k], O_RDONLY); // open given file in read-only mode
-        if (fd < 0)                       // if fd is negative, file open failed
+        int fd = open(argv[k], O_RDONLY);
+        if (fd < 0)
         {
-            printf("Error: Could not open file %s\n", argv[k]);
+            printf("sixfive: cannot open %s\n", argv[k]);
             continue;
         }
-
-        // reset variables for each file
-        i = 0;
-        flag = 1; // indicates if we are ready to read a new number
-        sixorfiveflag = 0;
-        final = 0;
-        notfivesixflag = 0;
-
-        while (read(fd, &c, 1) != 0) // read one character at a time until end of file
-        {
-            if (isdigit(c) && flag && (c == '5' || c == '6') && notfivesixflag == 0) // if current char is digit and we are ready to read a new number and it is 5 or 6
-            {
-                buffer[i] = c;
-                i++;
-                flag = 0; // set flag to 0 to indicate we are in the middle of reading a number
-                sixorfiveflag = 1;
-            }
-            else // if current char is not a digit and not 5 or 6
-            {
-                if (i > 0) // if we have read some digits into buffer, that means the number has ended and the current char is a new line or delimiter
-                {
-                    buffer[i] = '\0';
-                    final = atoi(buffer);
-                }
-                if (sixorfiveflag == 1 && i < 4) // if sum is multiple of 5 or 6 and not zero
-                {
-                    printf("%d\n", final);
-                }
-                flag = 0; // set flag to 0, this makes sure we don't read a new number until we see a digit or delimiter
-                sixorfiveflag = 0;
-                i = 0;
-            }
-            if ((strchr(delims, c)) || isdigit(c)) // if current char is a delimiter or digit
-            {
-                flag = 1;
-            }
-            if (isdigit(c) && (c == '5' || c == '6'))
-            {
-            }
-            else
-            {
-                notfivesixflag = 1;
-            }
-            if (notfivesixflag == 1 && c == '\n')
-            {
-                notfivesixflag = 0;
-            }
-        }
-
-        if (i > 0) // if there are remaining digits in buffer after EOF
-        {
-            buffer[i] = '\0';
-            final = atoi(buffer);
-            if (sixorfiveflag)
-            {
-                printf("%d\n", final);
-            }
-        }
-
+        process(fd);
         close(fd);
     }
     exit(0);

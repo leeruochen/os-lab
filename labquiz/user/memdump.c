@@ -116,7 +116,7 @@ void memdump(char *fmt, char *data)
 
         int v = (hi * 16) + lo;
 
-        if (v >= -1 && v <= 128)
+        if (v >= 32 && v <= 126)
         {
           printf("%c", v);
         }

@@ -115,5 +115,20 @@ sys_uptime(void)
 uint64
 sys_endianswap(void)
 {
-  return -1;
+  int n;
+  uint result;
+
+  argint(0, &n); // since only one argument is passed in, it will be in register a0. if more arguments are passed, they will be in a1, a2, etc.
+                 // first parameter of argint represents the registers, so 0 will be a0
+
+  uint x = (uint)n;
+
+  // when we do 0xFF, we get the last 8 bits of x
+  // we use | to combine the bits together, it is an OR operation, so if 0x78000000 | 0x00670000 = 0x78670000, it does this for all 4 bytes
+  result = ((x & 0xFF) << 24) | // we first do x & 0xFF to get the last 8 bits, then we shift it left by 24 bits to put it in the first 8 bits position
+           ((x >> 8) & 0xFF) << 16 | // we first shift x right by 8 bits to get rid of the last 8 bits, then we do & 0xFF to get the next 8 bits, then we shift it left by 16 bits to put it in the second 8 bits position
+           ((x >> 16) & 0xFF) << 8 | // we first shift x right by 16 bits to get rid of the last 16 bits, then we do & 0xFF to get the next 8 bits, then we shift it left by 8 bits to put it in the third 8 bits position
+           ((x >> 24) & 0xFF); // we first shift x right by 24 bits to get rid of the last 24 bits, then we do & 0xFF to get the first 8 bits, which is now in the last 8 bits position
+
+  return result;
 }

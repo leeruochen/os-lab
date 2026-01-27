@@ -1,0 +1,11 @@
+*** Now run 'gdb' in another window.
+
+xv6 kernel is booting
+
+hart 2 starting
+hart 1 starting
+init: starting sh
+$ swap32_sys 0xZYXWVUTS
+Input:  0xZYXWVUTS
+Invalid argument
+$ qemu-system-riscv64: terminating on signal 15 from pid 2505 (make)

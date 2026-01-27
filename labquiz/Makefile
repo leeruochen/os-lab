@@ -197,6 +197,7 @@ UPROGS=\
 	$U/_dorphan\
 	$U/_sixfive\
 	$U/_memdump\
+	$U/_swap32_sys\
 
 ifeq ($(LAB),syscall)
 UPROGS += \
