@@ -110,3 +110,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_monitor(void)
+{
+  int mask;
+  argint(0, &mask);
+
+  struct proc *p = myproc();
+  p->monitor_mask = (uint32)mask;
+
+  return 0;
+}

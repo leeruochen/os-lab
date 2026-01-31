@@ -198,6 +198,7 @@ UPROGS=\
 	$U/_handshake\
 	$U/_secret\
 	$U/_sniffer\
+	$U/_monitor\
 
 ifeq ($(LAB),thread)
 UPROGS += \

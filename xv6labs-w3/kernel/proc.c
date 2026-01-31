@@ -299,6 +299,8 @@ kfork(void)
   np->state = RUNNABLE;
   release(&np->lock);
 
+  np->monitor_mask = p->monitor_mask;
+
   return pid;
 }
 
