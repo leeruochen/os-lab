@@ -10,7 +10,9 @@
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
 
-struct thread_context {
+struct thread_context { // use uint64 to store the register values, since they are 64-bit values in RISC-V architecture
+  // uint64 means unsigned long, which is a 64-bit unsigned integer. This is used to store the values of the registers, which are 64 bits in RISC-V architecture.
+  // unsigned means that the value can only be positive, which is appropriate for register values, as they represent memory addresses or data values that are typically non-negative.
   uint64 ra;
   uint64 sp;
   uint64 s0;
@@ -49,7 +51,7 @@ thread_init(void)
 }
 
 void 
-thread_schedule(void)
+thread_schedule(void) // MAIN CHANGES
 {
   struct thread *t, *next_thread;
 
@@ -58,7 +60,9 @@ thread_schedule(void)
   t = current_thread + 1; // this sets t to point to the next thread in the all_thread array after the current thread. 
   for(int i = 0; i < MAX_THREAD; i++){
     if(t >= all_thread + MAX_THREAD) // end of thread array, loop back to the beginning
-      t = all_thread; // all_thread is the base address of the thread array, so this sets t to the first thread in the array
+      {t = all_thread;} // all_thread is the base address of the thread array, so this sets t to the first thread in the array
+                        // this actually creates a loop that loops through threads a to c, as those threads usually dont end in one iteration before they yield the cpu
+                        // eventually, when all threads become FREE, the loop will find that there are no RUNNABLE threads and will print the error message and exit.
     if(t->state == RUNNABLE) {
       next_thread = t;
       break;
@@ -79,13 +83,27 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+    // when thread_switch is called, the first arg is stored in a0, the second in a1.
+    // in uthread_switch.S, sd ra, 0(a0) stores the return address of the first argument (which is current thread) in RAM, and does so for all registers.
+    // then, ld ra, 0(a1) loads the previously stored ra of the second argument (which is next thread) from RAM, and does so for all registers.
+    // how was it previously stored? it was stored in previous iterations of thread_schedule. when ld ra, 0(a1) is called, if a1 is thread_b, it will load ra of previous stored thread_b's ra.
+    // how about the first time thread_schedule is called? back in thread_create, specifically t->context->ra and t->context->sp, this stores the registers into the RAM.
+    // so when it is first called, it loads the sp and ra stored by thread_create, and in subsequent calls, it loads the sp and ra stored by previous iterations of thread_schedule.
     thread_switch((uint64)t->context, (uint64)next_thread->context);
   } else
     next_thread = 0;
 }
 
+// void thread_yield_custom(){
+//   current_thread->state = RUNNABLE;
+
+//   current_thread->context->pc = (uint64)__builtin_return_address(0);// this sets the pc to the exact program counter of the curren thread.
+
+//   thread_schedule();
+// }
+
 void 
-thread_create(void (*func)())
+thread_create(void (*func)()) // MAIN CHANGES
 {
   struct thread *t;
 
@@ -95,13 +113,25 @@ thread_create(void (*func)())
   t->state = RUNNABLE; // this is the line that adds the threads into the queue which is all_thread.
   // since main() takes up all_thread[0], the first thread created will be all_thread[1], the second will be all_thread[2], and the third will be all_thread[3]. If we try to create a fourth thread, it will find that all threads are in use and will not create a new thread.
   // YOUR CODE HERE
+  // the stack pointer points to the top of the stack, the stack holds the data and variable for the thread,
+  // this is continuously being updated as the thread executes. for example in thread_a, int i is created and stored in the stack.
+  // the thread_context we created to store the registers are used whenever the thread is switched out and context switch happens.
+
+  // the thread context helps the cpu perform context switch from one thread to another.
+  // the sp points to the top of the stack of the thread that owns that thread context. this helps the cpu switch from one thread to another. the sp never changes, it always points to the top.
+  // ra stores the memory address where the thread will resume execution when it is switch back in.
+  // s0 to s11 are registers used to store long-term variables etc.
+
   // take the pointer to the starting address of the thread's stack, add STACK_SIZE to it to get the top of the stack, and store it in sp. This is because stacks grow downwards, so the top of the stack is at the highest address.
   uint64 sp = (uint64)t->stack + STACK_SIZE; // this sets sp to the top of the stack
   sp -= sizeof(struct thread_context); // make space for the thread context
+
   // this makes the struct thread_context use the reserved space created by the previous line, and sets t->context to point to that space
   t->context = (struct thread_context*)sp;
+
   // the name of the function, func, is a pointer to the memory address where the function's machine code starts. So we can set the return address (ra) to func, so that when the thread is switched to, it will start executing func.
   t->context->ra = (uint64)func;
+
   // this sets the sp to the start line, when threads are created, they will start executing func, and func will use the stack for its local variables and function calls. it stores the local variables downwards to not overwrite the thread context, which is stored at the top of the stack. So we set sp to the top of the stack, and the thread context will be above it, and func will use the rest of the stack for its execution.
   t->context->sp = sp;
 }
