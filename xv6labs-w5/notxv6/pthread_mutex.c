@@ -3,6 +3,8 @@
 
 int x = 0;      // global variable
 
+// the solution of pthread_race where you create mutex locks to ensure only 1 thread can modify x at a time
+
 //Create mutex
 pthread_mutex_t test_mutex;
 

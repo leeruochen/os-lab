@@ -36,6 +36,11 @@ static void *thread1_fn(void *arg) {
 // Thread 2
 // Lock order: r2 → r1
 // Opposite order → possible DEADLOCK
+// this shows us how a deadlock can occur when two threads lock resources in different orders.
+// the proper way to prevent deadlocks is to lock them in the same order.
+// eventually, the OS's timer will go off at the worst possible timing which is thread1 locking r1 and then it context switches to thread2.
+// thread 2 then locks r2 and tries to lock r1 but it is already locked by thread1, so thread2 is blocked waiting for r1 to be unlocked.
+// this causes thread 2 to be blocked waiting for thread 1 to release r1, and thread 1 is blocked waiting for thread 2 to release r2, resulting in a deadlock.
 static void *thread2_fn(void *arg) {
     while (1) {
 

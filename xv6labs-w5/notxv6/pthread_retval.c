@@ -43,3 +43,7 @@ int main()
 
     return 0;
 }
+
+// this shows how we can pass in multiple arguments using a struct to a thread and get back multiple values by using another struct
+// initialize the values in the args struct, then pass it in create
+// then retrieve the values with join and type cast it to the result struct.

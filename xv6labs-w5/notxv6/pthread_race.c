@@ -3,6 +3,9 @@
 
 int x = 0;   // global variable
 
+// this shows a race condition where two threads are incrementing the same global variable without any synchronization, which can lead to unpredictable results due to interleaving of instructions.
+// if the os interrupts when a thread is in the middle of incrementing x, the other thread can also read the same value of x and increment it, resulting in lost updates and incorrect final value of x.
+
 void* fun(void* in)
 {
     int i;

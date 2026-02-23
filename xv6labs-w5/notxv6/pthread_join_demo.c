@@ -5,9 +5,12 @@
 
 void *thread_func_callback(void *arg)           //callback 
 {
+    // reads the argument passed which is *sleep_p, then frees the memory allocated for it.
     int input = *(int *)arg;
     free(arg);
     
+    // calloc is used as this provides a memory block in RAM.
+    // if a normal local variable is used, since it is stored in the thread's stack, when the thread exits, it will be destroyed.
     int *result= calloc(1, sizeof(int));
     *result = input * input;
     printf("inside thread: thread result = %d\n", *result);    
@@ -15,6 +18,9 @@ void *thread_func_callback(void *arg)           //callback
     printf("inside thread: sleep arg = #%d\n", input);    
     sleep(*result);
 
+    // to get back the value of the thread function, remember to use malloc or calloc to allocate memory for the result
+    // then when returing, type cast the pointer to void* and return it.
+    // we can also use pthread_exit((void *) result) to return the result, it is the exact same as using return.
     return (void *)result;  // return void pointer
 }
 
@@ -26,8 +32,13 @@ void thread_create(pthread_t *thread_p, int input){
     *sleep_p = input;
     printf("To pass sleep arg to thread = %d\n", *sleep_p);
 
+    // this section shows how we can set the thread attributes to be custom
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    // default
+    // thiscan be used to set custom stack size.
+    // size_t customStackSize = 1024*1024; // 1MB
+    // pthread_attr_setstacksize(&attr, customStackSize);              // set custom stack size
+    // pthread_attr_setschedpolicy(&attr, SCHED_RR); // set custom scheduling policy such as SCHED_RR, SCHED_FIFO, SCHED_OTHER (default)
 
     int rc = pthread_create(thread_p, &attr, &thread_func_callback, (void *)sleep_p);
 	if(rc != 0) {
@@ -47,6 +58,8 @@ int main(int argc, char *argv[])
     void *res1_p=NULL, *res2_p=NULL, *res3_p=NULL;  // pointer to return result
 
     printf("wait on thread#3 to join first...\n");
+    // pthread_join() is used to wait for a thread to terminate., the second argument is used to retrieve the return value of the thread function
+    // this is where the magic of synchronization happens, since the code calls to wait for t3 first, the whole program freezes until t3 returns the value
     pthread_join(t3, &res3_p); // blocking call
     printf("result3 = %d\n", *(int *)res3_p);
     free(res3_p);
