@@ -115,6 +115,9 @@ uint64
 sys_monitor(void)
 {
   int mask;
+  // argint retrieves the arguments that was passed from user program with monitor(mask)
+  // 0 indicates the first argument, &mask is the pointer to store the value of the argument
+  // 1 indicates the second argument, and so on
   argint(0, &mask);
 
   struct proc *p = myproc();
