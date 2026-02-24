@@ -67,7 +67,7 @@ thread_schedule(void) // MAIN CHANGES
       next_thread = t;
       break;
     }
-    t = t + 1;
+    t = t + 1; // this moves t to the next thread in the array, so that it can check if the next thread is RUNNABLE in the next iteration of the loop. this is the loop mover
   }
 
   if (next_thread == 0) {
@@ -127,6 +127,7 @@ thread_create(void (*func)()) // MAIN CHANGES
   sp -= sizeof(struct thread_context); // make space for the thread context
 
   // this makes the struct thread_context use the reserved space created by the previous line, and sets t->context to point to that space
+  // this is stored in the computer's RAM.
   t->context = (struct thread_context*)sp;
 
   // the name of the function, func, is a pointer to the memory address where the function's machine code starts. So we can set the return address (ra) to func, so that when the thread is switched to, it will start executing func.

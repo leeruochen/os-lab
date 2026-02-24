@@ -4,6 +4,12 @@
 
 int main(int argc, char *argv[])
 {
+    // this utilizes three pipes.
+    // first pipe filters the even numbers out from the given array
+    // second pipe sums up the even numbers
+    // third pipe sends the result back to the parent process
+    // parent print the result and exit
+
     int numbers[5] = {1, 2, 3, 4, 5};
     int val;
     int res;
@@ -67,11 +73,10 @@ int main(int argc, char *argv[])
     }
     close(p2a[1]);
 
+    read(b2p[0], &res, sizeof(int));
     wait(0);
     wait(0);
 
-    read(b2p[0], &res, sizeof(int));
-    
     printf("result = %d\n", res);
     close(b2p[0]);
     exit(0);

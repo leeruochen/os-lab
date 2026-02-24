@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>     // calloc
 #include <pthread.h>
-#include <unistd.h>     // pause and sleep
+#include <unistd.h>     // pause and sleep 
 
 void *thread_func_callback(void *arg)           //callback 
 {
@@ -34,7 +34,7 @@ void thread_create(pthread_t *thread_p, int input){
 
     // this section shows how we can set the thread attributes to be custom
     pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    // default
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    // defaulte
     // thiscan be used to set custom stack size.
     // size_t customStackSize = 1024*1024; // 1MB
     // pthread_attr_setstacksize(&attr, customStackSize);              // set custom stack size

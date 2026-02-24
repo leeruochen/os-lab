@@ -17,7 +17,7 @@ int is_valid_sixfive(char *s)
    6:	e426                	sd	s1,8(sp)
    8:	1000                	addi	s0,sp,32
    a:	84aa                	mv	s1,a0
-    if (strlen(s) == 0) return 0; // Empty string is not a valid number
+    if (strlen(s) == 0) return 0; // Empty string is not a valid number, it shouldnt even get here because i > 0 checks if there is at least one char
    c:	1fa000ef          	jal	206 <strlen>
   10:	2501                	sext.w	a0,a0
   12:	c11d                	beqz	a0,38 <is_valid_sixfive+0x38>
@@ -43,7 +43,7 @@ int is_valid_sixfive(char *s)
     return 1; // All checks passed
   34:	4505                	li	a0,1
   36:	a011                	j	3a <is_valid_sixfive+0x3a>
-    if (strlen(s) == 0) return 0; // Empty string is not a valid number
+    if (strlen(s) == 0) return 0; // Empty string is not a valid number, it shouldnt even get here because i > 0 checks if there is at least one char
   38:	4501                	li	a0,0
 }
   3a:	60e2                	ld	ra,24(sp)
