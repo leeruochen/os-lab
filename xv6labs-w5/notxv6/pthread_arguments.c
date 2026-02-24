@@ -1,15 +1,18 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <pthread.h>
 
 // this shows how we can use an integer into a thread that accepts a void pointer, and how it type casts.
 // threads only accept void pointers as an argument.
 
-void *thread_func(void *arg)                    //correct syntax
-//void *thread_func(int *arg)                   //incorrect syntax - will result in compile error
+void *thread_func(void *arg) // correct syntax
+// void *thread_func(int *arg)                   //incorrect syntax - will result in compile error
 {
-    printf("I am thread #%d\n", *(int *)arg);   //correct syntax
-    //printf("I am thread #%d\n", *arg);        //incorrect syntax - will result in compile error
-    return NULL;
+    printf("I am thread #%d\n", *(int *)arg); // correct syntax
+    // printf("I am thread #%d\n", *arg);        //incorrect syntax - will result in compile error
+    int *local = calloc(1, sizeof(int));
+    *local = *(int *)arg * 10;
+    return (void *)local;
 }
 
 int main(int argc, char *argv[])
@@ -23,9 +26,15 @@ int main(int argc, char *argv[])
     pthread_create(&t1, NULL, &thread_func, &i);
     pthread_create(&t2, NULL, &thread_func, &j);
 
+    void *res = NULL;
+
     // This makes the main thread wait on the termination of t1 and t2.
-    pthread_join(t1, NULL);
-    pthread_join(t2, NULL);
+    pthread_join(t1, &res);
+    printf("Thread 1 returned %d\n", *(int *)res);
+    pthread_join(t2, &res);
+    printf("Thread 2 returned %d\n", *(int *)res);
+
+    free(res);
 
     printf("In main thread\n");
     return 0;
@@ -37,8 +46,8 @@ int main(int argc, char *argv[])
 // // the fourth argument is a pointer to the **arguments** that will be passed to the thread function. this can be NULL if the thread function does not require any arguments.
 // int retcode = pthread_create(&thread, NULL, threadfunction, NULL);
 
-// // pthread_join() is used to wait for a thread to terminate. 
-// //it takes two arguments: the thread ID of the thread to wait for, and a pointer to a void* variable where the return value of the thread function will be stored. 
+// // pthread_join() is used to wait for a thread to terminate.
+// //it takes two arguments: the thread ID of the thread to wait for, and a pointer to a void* variable where the return value of the thread function will be stored.
 // //if the thread function does not return a value, you can pass NULL as the second argument.
 // pthread_join_demo show cases how we can get the return value of a thread function.
 // int retval = pthread_join(thread, NULL); /*wait until the created thread terminates*/

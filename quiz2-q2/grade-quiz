@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+import re
+import subprocess
+import sys
+from gradelib import *
+
+r = Runner(save("xv6.out"))
+
+@test(1, "pthread_locks_test")
+def test_pthread_locks():
+    # 1. Compile using the Makefile target
+    # This ensures consistency with the lab environment flags
+    subprocess.run(['make', 'pthread_locks'], check=True)
+    
+    # 2. Run the binary multiple times (20) to catch intermittent issues
+    # We remove check=True to handle exit codes 0/1 manually
+    runs = 20
+    for i in range(1, runs + 1):
+        try:
+            result = subprocess.run(
+                ['./pthread_locks'], 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                timeout=5
+            )
+        except subprocess.TimeoutExpired:
+            raise AssertionError(f"FAIL: Deadlock detected on run {i}/{runs}. Check your locking order!")
+
+        out = result.stdout.decode("utf-8")
+        
+        # 3. Check for logical failure (status 1) returned by the C program
+        if result.returncode != 0:
+            match = re.search(r'Final Shared: A=(\d+) B=(\d+) total_ops=(\d+) done=(\d+)', out)
+            if match:
+                actual_ops = match.group(3)
+                raise AssertionError(f"FAIL: Race condition detected on run {i}/{runs}. Expected 80000, but got {actual_ops}")
+            else:
+                raise AssertionError(f"FAIL: Program exited with status {result.returncode} on run {i}")
+
+    # 4. Final verification of output formatting from the last successful run
+    match = re.search(r'Final Shared: A=(\d+) B=(\d+) total_ops=(\d+) done=(\d+)', out)
+    if not match:
+        raise AssertionError("FAIL: Output format incorrect (could not find 'Final Shared')")
+
+    # Deterministic values based on LOOP_COUNT=20000
+    # worker_AB adds 1*20k, worker_BA adds 2*20k -> Total 60000
+    assert_equal(int(match.group(1)), 60000)
+    assert_equal(int(match.group(2)), 60000)
+    assert_equal(int(match.group(3)), 80000)
+    assert_equal(int(match.group(4)), 1)
+
+# --- WRAPPER IMPLEMENTATION ---
+# This prevents 'make' from throwing an 'Error 1' when a test fails.
+# The student sees their score and the FAIL reason, but the script exits cleanly.
+try:
+    run_tests()
+except SystemExit:
+    # gradelib.run_tests() calls sys.exit(1) on failure or sys.exit(0) on success.
+    # We intercept this and always exit 0 to keep the Makefile output clean.
+    sys.exit(0)

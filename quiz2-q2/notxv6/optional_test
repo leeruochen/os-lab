@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 1) Check for deadlock/hang (single run)
+if ! timeout 3 ./pthread_locks >/dev/null; then
+  echo "HANG/DEADLOCK"
+  exit 2
+fi
+
+# 2) Run 20 times to catch intermittent races
+for i in {1..20}; do
+  if ! timeout 3 ./pthread_locks >/dev/null; then
+    echo "FAIL on run $i (HANG/DEADLOCK)"
+    exit 2
+  fi
+
+  # Program should return 0 on success (your code already does that)
+  # If it returns non-zero, it's a correctness failure (race / wrong totals)
+done
+
+echo "PASS"
