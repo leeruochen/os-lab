@@ -385,7 +385,7 @@ bmap(struct inode *ip, uint bn)
   uint addr, *a;
   struct buf *bp;
 
-  if(bn < NDIRECT){
+  if(bn < NDIRECT){ // direct block allocation
     if((addr = ip->addrs[bn]) == 0){
       addr = balloc(ip->dev);
       if(addr == 0)
@@ -396,7 +396,7 @@ bmap(struct inode *ip, uint bn)
   }
   bn -= NDIRECT;
 
-  if(bn < NINDIRECT){
+  if(bn < NINDIRECT){ // singly-indirect block allocation
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0){
       addr = balloc(ip->dev);
@@ -416,6 +416,46 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn -= NINDIRECT;
+
+  if (bn < NINDIRECT*NINDIRECT){ // doubly-indirect block allocation
+    if((addr = ip->addrs[NDIRECT+1]) == 0){ // get the address of the doubly-indirect block, if it is not exist, we need to allocate one block for it
+      addr = balloc(ip->dev);
+      if(addr == 0) // allocation failed
+        return 0;
+      ip->addrs[NDIRECT+1] = addr;
+    }
+    // what bread does is buffer read, it grabs block of data from hard drive into the ram so we can look at it
+    // ip->dev tells the os which hard drive this file lives on
+    // addr gives the address of the block of the hard disk. this tell bread which address to look at in the block
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    int index1 = bn / 256;
+    int index2 = bn % 256;
+
+    if((addr = a[index1]) == 0){ // change addr to the address of the secondary map block in the master map.
+      addr = balloc(ip->dev);
+      if(addr){ // if allocation succeed, we need to update the master map and write it back to the disk
+        a[index1] = addr;
+        log_write(bp);
+      }
+    }
+    brelse(bp);
+
+    bp = bread(ip->dev, addr); // now with the updated addr, we can read the secondary map block into the ram
+    a = (uint*)bp->data;
+
+    if((addr = a[index2]) == 0){
+      addr = balloc(ip->dev);
+      if(addr){
+        a[index2] = addr;
+        log_write(bp);
+      }
+    }
+    brelse(bp);
+    return addr;
+  }
 
   panic("bmap: out of range");
 }
@@ -426,8 +466,8 @@ void
 itrunc(struct inode *ip)
 {
   int i, j;
-  struct buf *bp;
-  uint *a;
+  struct buf *bp, *bp2;
+  uint *a, *a2;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -446,6 +486,26 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if(ip->addrs[NDIRECT+1]){
+    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a = (uint*)bp->data;
+    for(i = 0; i < NINDIRECT; i++){
+      if(a[i]){
+        bp2 = bread(ip->dev, a[i]);
+        a2 = (uint*)bp2->data;
+        for(j = 0; j < NINDIRECT; j++){
+          if(a2[j])
+            bfree(ip->dev, a2[j]);
+        }
+        brelse(bp2);
+        bfree(ip->dev, a[i]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;

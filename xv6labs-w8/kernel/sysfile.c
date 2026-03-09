@@ -335,6 +335,40 @@ sys_open(void)
     }
   }
 
+  if(!(omode & O_NOFOLLOW)){
+    int count = 0;
+    while(ip->type == T_SYMLINK && count < 10){
+      char target[MAXPATH];
+      // readi reads data from an inode given, and requires the inode to be locked by the caller
+      // signature, int readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
+      // ip is a pointer to the inode you want to read from
+      // user_dst, takes either 1 or 0, 1 for dst data from user's memory, 0 for kernel's memory, since we want to read the string into target which is in kernel's memory, use 0
+      // dst is the memory address you want to read into
+      // off is the offset from which to start reading
+      // n is the number of bytes to read
+      int len = readi(ip, 0, (uint64)target, 0, sizeof(target));
+      if(len <= 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      iunlockput(ip);
+      target[len] = 0; // null terminate the string
+      // namei looks up and returns the inode for a path, and requires the caller to call begin_op() before it and end_op() after it
+      if((ip = namei(target)) == 0){
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      count++;
+    }
+    if(count == 10){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
+
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
@@ -501,5 +535,40 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64 sys_symlink(void){
+  char path[MAXPATH], target[MAXPATH];
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0) // if user didnt enter arguments, arg 0 is the first arg and 1 is the second
+    return -1;
+  
+  begin_op(); // starts file system transaction, os tells kernel it is about to make changes to the disk, so write all changes to a temporary log first
+  // to commit the changes, have to call end_op();
+
+  struct inode *new = create(path, T_SYMLINK,0 ,0);
+  if (new == 0){
+    end_op();
+    return -1;
+  }
+
+  // writei writes data into an inode given, and requires the inode to be locked by the caller
+  // create returns a locked inode, so we just have to unlock it after the operation, to lock it manually, use ilock(struct inode *ip), to unlock iunlock(struct inode *ip)
+  // signature, int writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
+  // ip is a pointer to the inode you want to write into
+  // user_src, takes either 1 or 0, 1 for src data from user's memory, 0 for kernel's memory, since we copied the string into target which is in kernels memory, use 0
+  // src is the memory address you want to write
+  // off, the offset, where to begin writing inside the file if there are existing data you wish to not overwrite. 0 to start from beginning
+  // n, number of bytes to write into
+  if(writei(new, 0, (uint64)target, 0, strlen(target)) != strlen(target))
+  {
+    iunlockput(new);
+    end_op();
+    return -1;
+  }
+
+  iunlockput(new);
+  end_op();
   return 0;
 }
