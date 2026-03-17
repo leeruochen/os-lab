@@ -65,7 +65,7 @@
 
 static int getcwd(char *resultPath);
 static char *goUp(int ino, char *ancestorPath, char *resultPath);
-static int dirlookup(int fd, int ino, char *p);
+// static int dirlookup(int fd, int ino, char *p);
 
 int main(int argc, char *argv[])
 {
@@ -131,19 +131,19 @@ static char *goUp(int ino, char *ancestorPath, char *resultPath)
 // @param fd   file descriptor for a directory.
 // @param ino  target inode number.
 // @param p    [out] file name (part of absPath), overwritten by the file name of the ino.
-static int dirlookup(int fd, int ino, char *p)
-{
-  struct dirent de;
-  while (read(fd, &de, sizeof(de)) == sizeof(de))
-  {
-    if (de.inum == 0)
-      continue;
-    if (de.inum == ino)
-    {
-      memmove(p, de.name, DIRSIZ);
-      p[DIRSIZ] = '\0';
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
+// static int dirlookup(int fd, int ino, char *p)
+// {
+//   struct dirent de;
+//   while (read(fd, &de, sizeof(de)) == sizeof(de))
+//   {
+//     if (de.inum == 0)
+//       continue;
+//     if (de.inum == ino)
+//     {
+//       memmove(p, de.name, DIRSIZ);
+//       p[DIRSIZ] = '\0';
+//       return TRUE;
+//     }
+//   }
+//   return FALSE;
+// }
