@@ -382,12 +382,16 @@ iunlockput(struct inode *ip)
 static uint
 bmap(struct inode *ip, uint bn)
 {
+  // when bmap is called, caller passes in ip which is the inode they want to find the address of data block
+  // bn is the block number of the data block they want to find the address of, if this block does not exist, we need to allocate one for it and update the inode to point to this new block.
   uint addr, *a;
   struct buf *bp;
 
   if(bn < NDIRECT){ // direct block allocation
+    
+    // every if statement starts with allocating the addr to the address found in ip->addrs[bn], if it is 0, it means the block does not exist, we need to allocate one for it and update the ip->addrs[bn] to point to the new block
     if((addr = ip->addrs[bn]) == 0){
-      addr = balloc(ip->dev);
+      addr = balloc(ip->dev); // ip->dev tells os which hard drive this file will live, balloc will allocate a block on that hard drive and return the address of that block, if allocation failed, it will return 0
       if(addr == 0)
         return 0;
       ip->addrs[bn] = addr;
@@ -398,29 +402,37 @@ bmap(struct inode *ip, uint bn)
 
   if(bn < NINDIRECT){ // singly-indirect block allocation
     // Load indirect block, allocating if necessary.
-    if((addr = ip->addrs[NDIRECT]) == 0){
+
+    if((addr = ip->addrs[NDIRECT]) == 0){ // since the bn is smaller than 256 after subtracting NDIRECT which is 11, it means the bn the caller wants is in the singly
+      // if the master map block does not exist, we need to allocate one block for it
       addr = balloc(ip->dev);
       if(addr == 0)
         return 0;
       ip->addrs[NDIRECT] = addr;
     }
-    bp = bread(ip->dev, addr);
-    a = (uint*)bp->data;
-    if((addr = a[bn]) == 0){
+
+    // reads the data from the addr into bp, ip->dev here tells the os which device to read from
+    bp = bread(ip->dev, addr); // reads the map block into bp, bp is a buf struct
+
+    // now we store the content of bp into a
+    a = (uint*)bp->data; // bp->data is the content of the block read into bp.
+
+    // address of the data block would be stored in a[bn].
+    if((addr = a[bn]) == 0){ // set addr to the data that is found in a[bn], if it is 0, it means the data block has not been allocated, we need to allocate one for it
       addr = balloc(ip->dev);
       if(addr){
         a[bn] = addr;
         log_write(bp);
       }
     }
-    brelse(bp);
-    return addr;
+    brelse(bp); // release the buffer
+    return addr; // return the address of the data block
   }
   bn -= NINDIRECT;
 
-  if (bn < NINDIRECT*NINDIRECT){ // doubly-indirect block allocation
+  if (bn < NINDIRECT*NINDIRECT){ // doubly-indirect block allocation, this means bn < 65536.
     if((addr = ip->addrs[NDIRECT+1]) == 0){ // get the address of the doubly-indirect block, if it is not exist, we need to allocate one block for it
-      addr = balloc(ip->dev);
+      addr = balloc(ip->dev); // ip->dev tells os which hard drive to create the block
       if(addr == 0) // allocation failed
         return 0;
       ip->addrs[NDIRECT+1] = addr;
@@ -429,10 +441,10 @@ bmap(struct inode *ip, uint bn)
     // ip->dev tells the os which hard drive this file lives on
     // addr gives the address of the block of the hard disk. this tell bread which address to look at in the block
     bp = bread(ip->dev, addr);
-    a = (uint*)bp->data;
+    a = (uint*)bp->data; // then we store the content of the read block into a
 
+    // at this point, a is still the master map, we need to find the address of the secondary map block in the master map, which is stored in a[index1], lets say bn is 500, index1 will = 1, since bn is 500, it is stored in the second block of the secondary map
     int index1 = bn / 256;
-    int index2 = bn % 256;
 
     if((addr = a[index1]) == 0){ // change addr to the address of the secondary map block in the master map.
       addr = balloc(ip->dev);
@@ -446,7 +458,10 @@ bmap(struct inode *ip, uint bn)
     bp = bread(ip->dev, addr); // now with the updated addr, we can read the secondary map block into the ram
     a = (uint*)bp->data;
 
-    if((addr = a[index2]) == 0){
+    // lets say bn is 500, index2 will = 244. the address we want is stored in index 244 of the secondary map
+    int index2 = bn % 256;
+
+    if((addr = a[index2]) == 0){ // store addr with the address of the data block, if it is 0, we need to allocate one for it
       addr = balloc(ip->dev);
       if(addr){
         a[index2] = addr;
@@ -454,7 +469,7 @@ bmap(struct inode *ip, uint bn)
       }
     }
     brelse(bp);
-    return addr;
+    return addr; // return the address of the data block
   }
 
   panic("bmap: out of range");
@@ -465,21 +480,22 @@ bmap(struct inode *ip, uint bn)
 void
 itrunc(struct inode *ip)
 {
+  // itrunc is used to clean all data blocks.
   int i, j;
   struct buf *bp, *bp2;
   uint *a, *a2;
 
-  for(i = 0; i < NDIRECT; i++){
+  for(i = 0; i < NDIRECT; i++){ // first clean the direct blocks
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
       ip->addrs[i] = 0;
     }
   }
 
-  if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
+  if(ip->addrs[NDIRECT]){ // then clean the singly indirect blocks, we need to read the master map block first to find out which data blocks we need to clean
+    bp = bread(ip->dev, ip->addrs[NDIRECT]); // pass in the hard drive to read from and the address of the singly
     a = (uint*)bp->data;
-    for(j = 0; j < NINDIRECT; j++){
+    for(j = 0; j < NINDIRECT; j++){ // there will be 256 data blocks in the singly
       if(a[j])
         bfree(ip->dev, a[j]);
     }
@@ -488,23 +504,23 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT] = 0;
   }
 
-  if(ip->addrs[NDIRECT+1]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
-    a = (uint*)bp->data;
-    for(i = 0; i < NINDIRECT; i++){
-      if(a[i]){
+  if(ip->addrs[NDIRECT+1]){ // finally clean the doubly indirect blocks, we need to read the master map block first to find out which secondary map blocks we need to look at, then read each secondary map block to find out which data blocks we need to clean
+    bp = bread(ip->dev, ip->addrs[NDIRECT+1]); // pass the hard drive to read from and address of doubly
+    a = (uint*)bp->data; // store content of doubly into a
+    for(i = 0; i < NINDIRECT; i++){ // iterate through a which will be 256 secondary map blocks.
+      if(a[i]){ // if secondary map exists, we need to read it again to find out which data blocks we need to clean
         bp2 = bread(ip->dev, a[i]);
         a2 = (uint*)bp2->data;
-        for(j = 0; j < NINDIRECT; j++){
+        for(j = 0; j < NINDIRECT; j++){ // iterate through a2 which will be 256 data blocks and clean
           if(a2[j])
-            bfree(ip->dev, a2[j]);
+            bfree(ip->dev, a2[j]); 
         }
         brelse(bp2);
-        bfree(ip->dev, a[i]);
+        bfree(ip->dev, a[i]); // clean the secondary map and go to next one
       }
     }
     brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]); // finally free the doubly
     ip->addrs[NDIRECT+1] = 0;
   }
 
