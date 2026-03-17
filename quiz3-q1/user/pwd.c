@@ -65,7 +65,7 @@
 
 static int getcwd(char *resultPath);
 static char *goUp(int ino, char *ancestorPath, char *resultPath);
-// static int dirlookup(int fd, int ino, char *p);
+// static int dirlookup(int fd, int ino, char *p); ?? why overwrite xv6's own dirlookup?
 
 int main(int argc, char *argv[])
 {
