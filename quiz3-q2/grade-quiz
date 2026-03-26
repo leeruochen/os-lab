@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+
+import re
+from gradelib import *
+
+r = Runner(save("xv6.out"))
+
+@test(2, "find: test1 (basic file find)")
+def test_find_basic():
+    # Runs findtest1() which creates /Test/file1.txt and searches for it
+    r.run_qemu(shell_script([
+        'find_test'
+    ]))
+    r.match(r'Testing findtest1\(\)\.\.\.', r'findtest1\(\): OK!')
+
+run_tests()

@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+
+import re
+from gradelib import *
+
+r = Runner(save("xv6.out"))
+
+@test(4, "pwd: test1 (nested directory)")
+def test_pwd_nested():
+    # Executes pwd_test which internally handles mkdir and chdir synchronously
+    r.run_qemu(shell_script([
+        'pwd_test'
+    ]))
+    # Using raw strings (r'') to avoid invalid escape sequence warnings
+    r.match(r'Testing test1\(\)\.\.\.', r'test1\(\): OK!')
+
+run_tests()
