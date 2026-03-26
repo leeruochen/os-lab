@@ -505,19 +505,111 @@ sys_pipe(void)
 }
 
 // ICT1012 Lab 4 ----------------
-// implement sys_mmap
+// implement sys_mmap, this call creates a new memory mapping
+// goal is to find a free vma slot, populate it with the mapping metadata, and return the starting virtual address of the new mapping
 uint64
 sys_mmap(void)
 {
+  uint64 addr;
+  int length, prot, flags, fd, offset;
 
-  return -1;
+  struct file *f;
+  struct proc *p = myproc();
+
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  if (argfd(4, &fd, &f) < 0)
+    return -1;
+  argint(5, &offset);
+
+  if ((prot & PROT_WRITE) && (flags == MAP_SHARED) && !f->writable) // check write permissions
+    return -1;
+
+  if (!f->readable) // check read permissions at least
+    return -1;
+  
+  length = PGROUNDUP(length); // round up to page size
+
+  struct vma *nv = 0;
+
+  // find a free vma slot
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (!p->vmas[i].valid) {
+      nv = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (nv == 0) {
+    return -1; // no free vma slot
+  }
+
+  uint64 base = 0x40000000; //provides clean separation of concerns above heap size but below trapframe and trampoline
+
+  for (int i = 0; i < MAX_VMA; i++) { // if base has an existing vma, move base to end of vma
+    if (p->vmas[i].valid) {
+      if (base < p->vmas[i].addr + p->vmas[i].length) {
+        base = p->vmas[i].addr + p->vmas[i].length;
+      }
+    }
+  }
+
+  nv->addr = base;
+  nv->valid = 1;
+  nv->length = length;
+  nv->prot = prot;
+  nv->flags = flags;
+  nv->f = f;
+  nv->offset = offset;
+
+  filedup(f); // safely increment files reference instead of incrementing p->sz += length
+
+  return nv->addr; // return the starting virtual address of the new mapping
 }
 
-// implement sys_munmap
+// implement sys_munmap, this call removes a memory mapping
+// goal is to identify the correct vma, use provided hlper to clean up memory,
+// then update process's vma metadata
 uint64
 sys_munmap(void)
 {
 
-  return -1;
+  uint64 addr;
+  int length;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+
+  struct proc *p = myproc();
+  struct vma *v = 0;
+
+  // find the vma slot corresponding to the given address
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (p->vmas[i].valid && addr >= p->vmas[i].addr && addr < p->vmas[i].addr + p->vmas[i].length) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (v == 0) return -1;
+
+  vma_unmap(p, v, addr, length); // checks for modified(dirty) pages, writes back to the file if mapping is MAP_SHARED, then removes pages from pagetable
+
+  if (addr == v->addr && length == v->length) { //range matches vma exactly
+    fileclose(v->f); // close file reference
+    v->valid = 0;
+  } else if (addr == v->addr) { //partial unmap from start
+    v->addr += length;
+    v->offset += length;
+    v->length -= length;
+  } else { //partial unmap from end
+    v->length -= length;
+  }
+
+  sfence_vma(); //to flush the TLB
+
+  return 0;
 }
 //-------------------------------

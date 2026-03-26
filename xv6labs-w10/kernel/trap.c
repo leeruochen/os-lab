@@ -117,6 +117,7 @@ usertrap(void)
       // ok
   } else if((r_scause() == 15 || r_scause() == 13)) {      
       // ICT1012 Lab 4 ----------------
+
       // get the virtual address causing the page fault
       uint64 va = r_stval();
 
@@ -124,11 +125,13 @@ usertrap(void)
       struct vma *v = 0;
 
       // ... code here ...
+      for (int i = 0; i < MAX_VMA; i++) {
+        if (p->vmas[i].valid && va >= p->vmas[i].addr && va < p->vmas[i].addr + p->vmas[i].length) { // check if page fault (va) is within valid vma of process (p)
+          v = &p->vmas[i]; // set v to point to the valid vma
+          break;
+        }
+      }
 
-      
-      
-      
-      
       if(v != 0) {    
         // the virtual address is within a valid VMA
         // Handle VMA fault
@@ -136,22 +139,22 @@ usertrap(void)
         // call mmap_handler, which is implemented above
 
         // ... code ...
+        if ((r_scause() == 15) && !(v->prot & PROT_WRITE)) { // permissions correct
 
+          printf("permissions wrong\n");
+          setkilled(p);
 
+        } else if ((r_scause() == 13) && !(v->prot & PROT_READ)) { // permissions correct
 
+          printf("permissions wrong\n");
+          setkilled(p);
 
-
-
-
-
-
-
-
-
-
-
-
-
+        } else { // permissions incorrect
+          
+          if (mmap_handler(va, v) != 0) { // mmap_handler lazily loads file content into physical page, if error, kill process
+            setkilled(p); 
+          }
+        }        
 
       } else {    
           // 2. Not a VMA: Check if it's a valid Lazy Heap (sbrk) fault
@@ -159,14 +162,10 @@ usertrap(void)
           // Handle Heap fault (Lazy SBRK)
           // Now that VMAs are at 0x40000000, unmapped VMA addresses will NOT be < p->sz.
           // FIX for munmap_noaccess: Only allow lazy allocation for the heap
-          if(va < p->sz && va >= p->trapframe->sp) {
-
-            // ... code ...
-
-
-
+          if(va < p->sz && va >= p->trapframe->sp) { // check for lazy heap, when address is below heap limit (p->sz) and above sp
             
-            //-------------------------------        
+            vmfault(p->pagetable, va, 1); 
+
           } else {
             // 3. Invalid access (including unmapped MMAP memory): Kill process
             // If it's not a VMA and not in the heap, kill the process.

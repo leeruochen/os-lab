@@ -151,9 +151,9 @@ found:
   p->context.sp = p->kstack + PGSIZE;
 
 // ICT1012 Lab 4 ----------------
-
-
-
+  for (int i = 0; i < MAX_VMA; i++){
+    p->vmas[i].valid = 0;
+  }
 //-------------------------------
 
   return p;
@@ -284,23 +284,18 @@ kfork(void)
   np->sz = p->sz;
 
 // ICT1012 Lab 4 ----------------
+  // Copy VMAs
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (p->vmas[i].valid) {
 
+      // copy vma metadata from parent
+      np->vmas[i] = p->vmas[i];
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      // increment file reference count
+      // child now owns a reference
+      filedup(np->vmas[i].f);
+    }
+  }
 //-------------------------------
 
   // copy saved user registers.
@@ -415,18 +410,16 @@ kexit(int status)
     panic("init exiting");
 
 // ICT1012 Lab 4 ----------------
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (p->vmas[i].valid) {
 
+      vma_unmap(p, &p->vmas[i], p->vmas[i].addr, p->vmas[i].length); // unmap vma
 
+      fileclose(p->vmas[i].f); // decrement file reference count
 
-
-
-
-
-
-
-
-
-
+      p->vmas[i].valid = 0; // invalidate vma slot
+    }
+  }
 //-------------------------------
 
   // Close all open files.
