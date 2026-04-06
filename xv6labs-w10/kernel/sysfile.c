@@ -516,6 +516,7 @@ sys_mmap(void)
   struct file *f;
   struct proc *p = myproc();
 
+  // retrieve system call arguments
   argaddr(0, &addr);
   argint(1, &length);
   argint(2, &prot);
@@ -546,6 +547,7 @@ sys_mmap(void)
     return -1; // no free vma slot
   }
 
+  // find the lowest available virtual address range that can fit the new mapping, starting from a base address (e.g., 0x40000000)
   uint64 base = 0x40000000; //provides clean separation of concerns above heap size but below trapframe and trampoline
 
   for (int i = 0; i < MAX_VMA; i++) { // if base has an existing vma, move base to end of vma
@@ -579,6 +581,7 @@ sys_munmap(void)
   uint64 addr;
   int length;
 
+  // retrieve system call arguments
   argaddr(0, &addr);
   argint(1, &length);
 
@@ -597,8 +600,13 @@ sys_munmap(void)
 
   vma_unmap(p, v, addr, length); // checks for modified(dirty) pages, writes back to the file if mapping is MAP_SHARED, then removes pages from pagetable
 
-  if (addr == v->addr && length == v->length) { //range matches vma exactly
+  if (addr == v->addr && length == v->length) { //range matches vma exactly, full unmap
     fileclose(v->f); // close file reference
+
+    // if ((v->flags & MAP_ANONYMOUS) == 0 && v->f != 0) {
+    //   fileclose(v->f); 
+    // }
+
     v->valid = 0;
   } else if (addr == v->addr) { //partial unmap from start
     v->addr += length;
@@ -613,3 +621,421 @@ sys_munmap(void)
   return 0;
 }
 //-------------------------------
+
+// --------------------------------------------------------------------------------------------------------------- first fit approach to find the lowest available virtual address range that can fit the new mapping
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length, prot, flags, fd, offset;
+
+  struct file *f;
+  struct proc *p = myproc();
+
+  // retrieve system call arguments
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  if (argfd(4, &fd, &f) < 0)
+    return -1;
+  argint(5, &offset);
+
+  if ((prot & PROT_WRITE) && (flags == MAP_SHARED) && !f->writable) // check write permissions
+    return -1;
+
+  if (!f->readable) // check read permissions at least
+    return -1;
+  
+  length = PGROUNDUP(length); // round up to page size
+
+  struct vma *nv = 0;
+
+  // find a free vma slot
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (!p->vmas[i].valid) {
+      nv = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (nv == 0) {
+    return -1; // no free vma slot
+  }
+
+  // first fit approach to find the lowest available virtual address range that can fit the new mapping
+  uint64 base = 0x40000000; 
+  int overlap;
+
+  while (1) {
+    overlap = 0; 
+    
+    for (int i = 0; i < MAX_VMA; i++) {
+      if (p->vmas[i].valid) {
+        uint64 v_start = p->vmas[i].addr;
+        uint64 v_end = p->vmas[i].addr + p->vmas[i].length;
+
+        if (base < v_end && (base + length) > v_start) {
+          base = PGROUNDUP(v_end); 
+          overlap = 1; 
+          break; 
+        }
+      }
+    }
+    if (!overlap) break; 
+  }
+
+  if (base + length >= MAXVA) return -1;
+  // ------------------------------------------
+
+  nv->addr = base;
+  nv->valid = 1;
+  nv->length = length;
+  nv->prot = prot;
+  nv->flags = flags;
+  nv->f = f;
+  nv->offset = offset;
+
+  filedup(f); // safely increment files reference instead of incrementing p->sz += length
+
+  return nv->addr; // return the starting virtual address of the new mapping
+}
+
+// --------------------------------------------------------------------------------------------------------------- handle anonymous map
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length, prot, flags, fd, offset;
+
+  struct file *f = 0;
+  struct proc *p = myproc();
+
+
+  // retrieve system call arguments
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(5, &offset);
+
+  struct vma *nv = 0;
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (!p->vmas[i].valid) {
+      nv = &p->vmas[i];
+      break;
+    }
+  }
+  if (nv == 0) { return -1; }
+
+  // if (flags & MAP_ANONYMOUS) {
+  //   // ANONYMOUS MAPPING
+  //   nv->f = 0; // No file!
+  // } else {
+  //   // FILE-BACKED MAPPING (Your existing logic)
+  //   if (argfd(4, &fd, &f) < 0) return -1;
+  //   if (!f->readable) return -1;
+  //   if ((prot & PROT_WRITE) && (flags == MAP_SHARED) && !f->writable) return -1;
+    
+  //   nv->f = f;
+  //   filedup(f); // Only increment if it's a real file
+  // }
+  
+  length = PGROUNDUP(length); // round up to page size
+
+  // find the lowest available virtual address range that can fit the new mapping, starting from a base address (e.g., 0x40000000)
+  uint64 base = 0x40000000; //provides clean separation of concerns above heap size but below trapframe and trampoline
+
+  for (int i = 0; i < MAX_VMA; i++) { // if base has an existing vma, move base to end of vma
+    if (p->vmas[i].valid) {
+      if (base < p->vmas[i].addr + p->vmas[i].length) {
+        base = p->vmas[i].addr + p->vmas[i].length;
+      }
+    }
+  }
+
+  if (base + length >= MAXVA) return -1;
+  // ------------------------------------------
+
+  nv->addr = base;
+  nv->valid = 1;
+  nv->length = length;
+  nv->prot = prot;
+  nv->flags = flags;
+  nv->f = f;
+  nv->offset = offset;
+
+  filedup(f); // safely increment files reference instead of incrementing p->sz += length
+
+  return nv->addr; // return the starting virtual address of the new mapping
+}
+
+// --------------------------------------------------------------------------------------------------------------- explicit addressing
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length, prot, flags, fd, offset;
+
+  struct file *f;
+  struct proc *p = myproc();
+
+  // retrieve system call arguments
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  if (argfd(4, &fd, &f) < 0)
+    return -1;
+  argint(5, &offset);
+
+  if ((prot & PROT_WRITE) && (flags == MAP_SHARED) && !f->writable) // check write permissions
+    return -1;
+
+  if (!f->readable) // check read permissions at least
+    return -1;
+  
+  length = PGROUNDUP(length); // round up to page size
+
+  struct vma *nv = 0;
+
+  // find a free vma slot
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (!p->vmas[i].valid) {
+      nv = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (nv == 0) {
+    return -1; // no free vma slot
+  }
+
+  // 4. Address Allocation (Hint vs. First-Fit)
+  uint64 base = 0; 
+
+  // --- HINT CHECK ---
+  if (addr != 0) {
+    addr = PGROUNDDOWN(addr); // Hardware requires page-aligned starting addresses
+    
+    int hint_failed = 0;
+
+    // Check 1: Is the hint outside safe memory boundaries?
+    if (addr < p->sz || addr + length >= MAXVA) {
+      hint_failed = 1;
+    } else {
+      // Check 2: Does the hint overlap with any existing VMAs?
+      for (int i = 0; i < MAX_VMA; i++) {
+        if (p->vmas[i].valid) {
+          uint64 v_start = p->vmas[i].addr;
+          uint64 v_end = p->vmas[i].addr + p->vmas[i].length;
+
+          if (addr < v_end && (addr + length) > v_start) {
+            hint_failed = 1; // Collision detected!
+            break;
+          }
+        }
+      }
+    }
+
+    // If the hint survived all checks, use it!
+    if (!hint_failed) {
+      base = addr; 
+    }
+  }
+
+  if (base == 0) { // if addr is 0, find the lowest available virtual address range that can fit the new mapping
+    base = 0x40000000; //provides clean separation of concerns above heap size but below trapframe and trampoline
+
+    for (int i = 0; i < MAX_VMA; i++) { // if base has an existing vma, move base to end of vma
+      if (p->vmas[i].valid) {
+        if (base < p->vmas[i].addr + p->vmas[i].length) {
+          base = p->vmas[i].addr + p->vmas[i].length;
+        }
+      }
+    }
+  }
+
+  nv->addr = base;
+  nv->valid = 1;
+  nv->length = length;
+  nv->prot = prot;
+  nv->flags = flags;
+  nv->f = f;
+  nv->offset = offset;
+
+  filedup(f); // safely increment files reference instead of incrementing p->sz += length
+
+  return nv->addr; // return the starting virtual address of the new mapping
+}
+
+// ----------------------------------------------------------------------------write dirty pages back to disk without unmapping, then update vma metadata to reflect the unmapping of the specified range
+uint64
+sys_msync(void)
+{
+  uint64 addr;
+  int length;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+
+  struct proc *p = myproc();
+
+  // 1. Find the VMA containing this address
+  struct vma *v = 0;
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (p->vmas[i].valid &&
+        addr >= p->vmas[i].addr &&
+        addr < p->vmas[i].addr + p->vmas[i].length) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (v == 0) return -1;
+
+  // 2. Only MAP_SHARED needs writeback — MAP_PRIVATE changes are intentionally local
+  if (v->flags != MAP_SHARED) return 0;
+
+  // 3. Walk each page in the requested range
+  uint64 va_start = PGROUNDDOWN(addr);
+  uint64 va_end   = PGROUNDUP(addr + length);
+
+  for (uint64 va = va_start; va < va_end; va += PGSIZE) {
+    // Check if this page is actually mapped (lazy pages may not be loaded yet)
+    pte_t *pte = walk(p->pagetable, va, 0);
+    if (pte == 0 || !(*pte & PTE_V))
+      continue; // never accessed, nothing to sync
+
+    // 4. Check dirty bit — hardware sets PTE_D on any write
+    if (*pte & PTE_D) {
+      uint64 offset = v->offset + (va - v->addr); // file offset for this page
+      uint64 pa = PTE2PA(*pte);                   // physical address of this page
+
+      begin_op();
+      ilock(v->f->ip);
+      writei(v->f->ip, 0, pa, offset, PGSIZE);
+      iunlock(v->f->ip);
+      end_op();
+
+      *pte &= ~PTE_D; // clear dirty bit after successful writeback
+    }
+  }
+
+  sfence_vma(); // flush TLB so PTE changes take effect
+  return 0;
+}
+
+// returns the number of pages accessed in the mapping since the last call
+// clears PTE_A after counting so each call reflects only NEW accesses
+uint64
+sys_mmap_accessed(void)
+{
+  uint64 addr;
+  int length;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+
+  struct proc *p = myproc();
+
+  // 1. Find the VMA containing this address
+  struct vma *v = 0;
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (p->vmas[i].valid &&
+        addr >= p->vmas[i].addr &&
+        addr < p->vmas[i].addr + p->vmas[i].length) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (v == 0) return -1;
+
+  // 2. Walk each page in the range and check PTE_A
+  uint64 va_start = PGROUNDDOWN(addr);
+  uint64 va_end   = PGROUNDUP(addr + length);
+  int count = 0;
+
+  for (uint64 va = va_start; va < va_end; va += PGSIZE) {
+    pte_t *pte = walk(p->pagetable, va, 0);
+
+    if (pte == 0 || !(*pte & PTE_V))
+      continue; // lazy page, never faulted in — not accessed
+
+    if (*pte & PTE_A) {
+      count++;
+      *pte &= ~PTE_A; // clear the bit so next call starts fresh
+    }
+  }
+
+  sfence_vma(); // flush TLB so PTE_A clears are visible to hardware
+  return count;
+}
+
+// ----------------------------------------------------------------------------change permissions on existing mapping
+uint64
+sys_mprotect(void)
+{
+  uint64 addr;
+  int length, prot;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+
+  // basic validation
+  if (addr % PGSIZE != 0) return -1; // must be page aligned
+  if (length <= 0) return -1;
+  if (prot == 0) return -1; // must have at least one permission
+
+  struct proc *p = myproc();
+  length = PGROUNDUP(length);
+
+  // 1. Find the VMA containing this range
+  struct vma *v = 0;
+  for (int i = 0; i < MAX_VMA; i++) {
+    if (p->vmas[i].valid &&
+        addr >= p->vmas[i].addr &&
+        addr + length <= p->vmas[i].addr + p->vmas[i].length) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+
+  if (v == 0) return -1;
+
+  // 2. Check: if requesting PROT_WRITE on a MAP_SHARED read-only file, deny
+  if ((prot & PROT_WRITE) && (v->flags == MAP_SHARED) && !v->f->writable)
+    return -1;
+
+  // 3. Update the VMA's stored permissions
+  // This is critical for lazy pages — when mmap_handler maps them later,
+  // it reads v->prot to set PTE flags. So this must happen before walking pages.
+  v->prot = prot;
+
+  // 4. Walk already-mapped pages and update their PTEs
+  uint64 va_end = addr + length;
+
+  for (uint64 va = addr; va < va_end; va += PGSIZE) {
+    pte_t *pte = walk(p->pagetable, va, 0);
+
+    // skip lazy pages — they haven't been faulted in yet
+    // mmap_handler will use the updated v->prot when they are
+    if (pte == 0 || !(*pte & PTE_V))
+      continue;
+
+    // rebuild permission bits from scratch
+    // preserve PTE_V, PTE_U, PTE_A, PTE_D — only change R/W
+    *pte &= ~(PTE_R | PTE_W | PTE_X); // clear old permission bits
+
+    if (prot & PROT_READ)  *pte |= PTE_R;
+    if (prot & PROT_WRITE) *pte |= PTE_W;
+    // PROT_EXEC not required by the lab but would be: if (prot & PROT_EXEC) *pte |= PTE_X;
+  }
+
+  // 5. Flush TLB — stale cached PTEs would still use old permissions
+  sfence_vma();
+
+  return 0;
+}

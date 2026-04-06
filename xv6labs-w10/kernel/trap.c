@@ -49,6 +49,7 @@ int mmap_handler(uint64 va, struct vma *v) {
 
   // 2. calculate the offset
   uint offset = va_aligned - v->addr;
+  // uint offset = v->offset + (va_aligned - v->addr); // added for dynamic mmap, where offset is not always 0
 
   // 3. read file data from disk
   // use ilock/readi to read the data to the mem page allocated
@@ -115,7 +116,7 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
       // ok
-  } else if((r_scause() == 15 || r_scause() == 13)) {      
+  } else if((r_scause() == 15 || r_scause() == 13)) { // 15 or 13 is page fault
       // ICT1012 Lab 4 ----------------
 
       // get the virtual address causing the page fault
@@ -139,23 +140,50 @@ usertrap(void)
         // call mmap_handler, which is implemented above
 
         // ... code ...
-        if ((r_scause() == 15) && !(v->prot & PROT_WRITE)) { // permissions correct
-
+        if ((r_scause() == 15) && !(v->prot & PROT_WRITE)) { 
+          // permissions wrong, v->prot & PROT_WRITE returns nonzero if write permission is set, so !(v->prot & PROT_WRITE) is true when write permission is NOT set 
           printf("permissions wrong\n");
           setkilled(p);
 
-        } else if ((r_scause() == 13) && !(v->prot & PROT_READ)) { // permissions correct
-
+        } else if ((r_scause() == 13) && !(v->prot & PROT_READ)) { // permissions wrong
           printf("permissions wrong\n");
           setkilled(p);
+        } else { // permissions are correct, handle the page fault
 
-        } else { // permissions incorrect
-          
           if (mmap_handler(va, v) != 0) { // mmap_handler lazily loads file content into physical page, if error, kill process
             setkilled(p); 
           }
-        }        
+          
+          // if (v->flags & MAP_ANONYMOUS) {
+          //   // --- ANONYMOUS MAPPING (The Blank Slate) ---
+            
+          //   // 1. Allocate a physical frame of RAM
+          //   void *pa = kalloc();
+          //   if (pa == 0) {
+          //     setkilled(p); // Out of memory
+          //   } else {
+          //     // 2. Zero it out for security
+          //     memset(pa, 0, PGSIZE);
 
+          //     // 3. Convert POSIX PROT flags to hardware PTE flags
+          //     int pte_flags = PTE_U; // Always user-accessible
+          //     if (v->prot & PROT_READ)  pte_flags |= PTE_R;
+          //     if (v->prot & PROT_WRITE) pte_flags |= PTE_W;
+
+          //     // 4. Map the physical frame to the virtual address
+          //     // Use PGROUNDDOWN(va) to ensure we map the start of the 4KB page
+          //     if (mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)pa, pte_flags) != 0) {
+          //       kfree(pa); // Free the physical RAM if mapping fails
+          //       setkilled(p);
+          //     }
+          //   }
+          // } else {
+          //   // --- FILE-BACKED MAPPING ---
+          //   if (mmap_handler(va, v) != 0) { 
+          //     setkilled(p); 
+          //   }
+          // }
+        }
       } else {    
           // 2. Not a VMA: Check if it's a valid Lazy Heap (sbrk) fault
           // Addresses must be below p->sz and above the stack

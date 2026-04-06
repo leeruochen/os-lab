@@ -416,7 +416,11 @@ kexit(int status)
       vma_unmap(p, &p->vmas[i], p->vmas[i].addr, p->vmas[i].length); // unmap vma
 
       fileclose(p->vmas[i].f); // decrement file reference count
-
+      
+      // if ((p->vmas[i].flags & MAP_ANONYMOUS) == 0 && p->vmas[i].f != 0) {
+      //   fileclose(p->vmas[i].f);
+      // }
+      
       p->vmas[i].valid = 0; // invalidate vma slot
     }
   }
