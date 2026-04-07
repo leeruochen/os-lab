@@ -514,7 +514,7 @@ sys_mmap(void)
   int length, prot, flags, fd, offset;
 
   struct file *f;
-  struct proc *p = myproc();
+  struct proc *p = myproc(); // grab the current process, since we need to update its vma metadata and pagetable for the new mapping
 
   // retrieve system call arguments
   argaddr(0, &addr);
@@ -537,7 +537,7 @@ sys_mmap(void)
 
   // find a free vma slot
   for (int i = 0; i < MAX_VMA; i++) {
-    if (!p->vmas[i].valid) {
+    if (!p->vmas[i].valid) { // find a vma in process's vma array that is not currently valid (in use), and use that slot for the new mapping
       nv = &p->vmas[i];
       break;
     }
@@ -552,7 +552,7 @@ sys_mmap(void)
 
   for (int i = 0; i < MAX_VMA; i++) { // if base has an existing vma, move base to end of vma
     if (p->vmas[i].valid) {
-      if (base < p->vmas[i].addr + p->vmas[i].length) {
+      if (base < p->vmas[i].addr + p->vmas[i].length) { // check if base address is within an existing vma, if it is, move base to end of that vma
         base = p->vmas[i].addr + p->vmas[i].length;
       }
     }
